@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>عيادة الدكتور صهيب قيس</title>
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="العيادة">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+<style>
+:root{--p:#0f766e;--bg:#f1f5f9;--c:#fff;--t:#0f172a;--m:#64748b;--b:#e2e8f0}
+body.dark{--bg:#0f172a;--c:#1e293b;--t:#f1f5f9;--m:#94a3b8;--b:#334155}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Tahoma,sans-serif;background:var(--bg);color:var(--t);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button,input,select,textarea{font:inherit;color:inherit}
+.btn{background:var(--p);color:#fff;border:0;border-radius:10px;padding:9px 14px;cursor:pointer}.btn.g{background:var(--b);color:var(--t)}.btn.s{padding:5px 9px;font-size:13px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--b);border-radius:10px;background:var(--c);margin:4px 0 10px}
+label{font-size:13px;color:var(--m)}
+#login{max-width:360px;margin:12vh auto;padding:24px;background:var(--c);border-radius:16px;text-align:center}
+#app{display:none}header{background:var(--p);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px;background:var(--c);border-bottom:1px solid var(--b)}
+nav button{white-space:nowrap;border:0;background:none;padding:8px 12px;border-radius:10px;cursor:pointer}nav button.on{background:var(--p);color:#fff}
+main{padding:14px;max-width:1100px;margin:auto}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.card{background:var(--c);border-radius:14px;padding:14px}.card b{font-size:22px;display:block;margin-top:4px}
+.tw{overflow-x:auto;background:var(--c);border-radius:14px;padding:6px}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:9px;text-align:right;border-bottom:1px solid var(--b);white-space:nowrap}th{color:var(--m)}
+.bar{display:flex;gap:8px;justify-content:space-between;margin-bottom:10px;align-items:center}
+#modal{display:none;position:fixed;inset:0;background:#0008;z-index:9;align-items:center;justify-content:center;padding:14px}#modal.open{display:flex}
+#box{background:var(--c);border-radius:16px;padding:18px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
+#err{color:#dc2626;font-size:13px}#inst{display:none}
+</style>
+</head>
+<body>
+<div id="login">
+  <div style="font-size:48px">🦷</div><h2>عيادة الدكتور صهيب قيس</h2><p style="color:var(--m)">تسجيل الدخول إلى نظام إدارة العيادة</p>
+  <input id="em" type="email" placeholder="البريد الإلكتروني" dir="ltr"><input id="pw" type="password" placeholder="كلمة المرور" dir="ltr">
+  <div id="err"></div><button class="btn" style="width:100%" onclick="login()">تسجيل الدخول</button>
+</div>
+<div id="app">
+  <header><b>🦷 عيادة صهيب قيس</b><span><button id="inst" class="btn g s" onclick="installApp()">تثبيت</button> <button class="btn g s" onclick="document.body.classList.toggle('dark')">🌙</button> <button class="btn g s" onclick="auth.signOut()">خروج</button></span></header>
+  <nav id="nav"></nav><main id="view"></main>
+</div>
+<div id="modal"><div id="box"></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ====== ضع إعدادات Firebase نفسها المستخدمة في الموقع الحالي ======
+const firebaseConfig = {
+  apiKey: "PUT_API_KEY", authDomain: "PUT_PROJECT.firebaseapp.com", projectId: "PUT_PROJECT_ID",
+  storageBucket: "PUT_PROJECT.appspot.com", messagingSenderId: "PUT_SENDER_ID", appId: "PUT_APP_ID"
+};
+// أسماء المجموعات (Collections): غيّرها لتطابق قاعدة البيانات الحالية
+const COL = {patients:'patients', appts:'appointments', treatments:'treatments', invoices:'invoices'};
+// ===================================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth(), db = firebase.firestore();
+const $ = id => document.getElementById(id), D = {patients:[], appts:[], treatments:[], invoices:[]};
+const money = n => (Number(n)||0).toLocaleString('en') + ' د.ع';
+const today = () => new Date().toISOString().slice(0,10);
+const pname = id => (D.patients.find(p=>p.id===id)||{}).name || '—';
+let tab = 'home', unsubs = [];
+
+const TABS = {home:'🏠 الرئيسية', patients:'👥 المرضى', appts:'📅 المواعيد', treatments:'🦷 العلاجات', invoices:'💰 الحسابات'};
+$('nav').innerHTML = Object.entries(TABS).map(([k,v])=>`<button data-k="${k}" onclick="go('${k}')">${v}</button>`).join('');
+
+function login(){ $('err').textContent=''; auth.signInWithEmailAndPassword($('em').value.trim(), $('pw').value).catch(()=>$('err').textContent='البريد أو كلمة المرور غير صحيحة'); }
+auth.onAuthStateChanged(u => {
+  unsubs.forEach(f=>f()); unsubs=[];
+  $('login').style.display = u?'none':'block'; $('app').style.display = u?'block':'none';
+  if(!u) return;
+  Object.keys(COL).forEach(k => unsubs.push(db.collection(COL[k]).onSnapshot(s => { D[k]=s.docs.map(d=>({id:d.id,...d.data()})); render(); }, e=>console.error(k,e))));
+});
+function go(k){ tab=k; render(); }
+const save = (k,data,id) => id ? db.collection(COL[k]).doc(id).set(data,{merge:true}) : db.collection(COL[k]).add({...data,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+const del = (k,id) => confirm('تأكيد الحذف؟') && db.collection(COL[k]).doc(id).delete();
+
+function table(heads, rows){ return `<div class="tw"><table><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr>${rows.join('')||`<tr><td colspan="${heads.length}" style="text-align:center;color:var(--m)">لا توجد بيانات</td></tr>`}</table></div>`; }
+const bar = (t,k) => `<div class="bar"><h3 style="margin:0">${t}</h3><button class="btn" onclick="openForm('${k}')">+ إضافة</button></div>`;
+const acts = k => id => `<button class="btn g s" onclick="openForm('${k}','${id}')">تعديل</button> <button class="btn g s" onclick="del('${k}','${id}')">حذف</button>`;
+
+function render(){
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on', b.dataset.k===tab));
+  const inv=D.invoices, total=inv.reduce((a,i)=>a+(+i.total||0),0), paid=inv.reduce((a,i)=>a+(+i.paid||0),0);
+  let h='';
+  if(tab==='home'){
+    const ta = D.appts.filter(a=>a.date===today());
+    h = `<div class="cards"><div class="card">إجمالي المرضى<b>${D.patients.length}</b></div><div class="card">مواعيد اليوم<b>${ta.length}</b></div><div class="card">المدفوع<b>${money(paid)}</b></div><div class="card">المبالغ المتبقية<b>${money(total-paid)}</b></div></div>
+    <h3>مواعيد اليوم</h3>` + table(['المريض','الوقت','السبب','الحالة'], ta.map(a=>`<tr><td>${pname(a.patientId)}</td><td>${a.time||''}</td><td>${a.reason||''}</td><td>${a.status||''}</td></tr>`));
+  }
+  if(tab==='patients') h = bar('المرضى','patients') + `<input placeholder="🔍 بحث بالاسم أو الهاتف" oninput="q=this.value;render()" value="${window.q||''}">` +
+    table(['الاسم','الهاتف','العمر','المتبقي','إجراء'], D.patients.filter(p=>!window.q||(p.name+(p.phone||'')).includes(window.q)).map(p=>{
+      const rem=inv.filter(i=>i.patientId===p.id).reduce((a,i)=>a+(+i.total||0)-(+i.paid||0),0), age=p.birth?new Date().getFullYear()-new Date(p.birth).getFullYear():'';
+      return `<tr><td>${p.name}</td><td>${p.phone||''}</td><td>${age}</td><td>${money(rem)}</td><td><button class="btn g s" onclick="profile('${p.id}')">ملف</button> ${acts('patients')(p.id)}</td></tr>`;}));
+  if(tab==='appts') h = bar('المواعيد','appts') + table(['المريض','التاريخ','الوقت','السبب','الحالة','إجراء'], [...D.appts].sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).map(a=>`<tr><td>${pname(a.patientId)}</td><td>${a.date||''}</td><td>${a.time||''}</td><td>${a.reason||''}</td><td>${a.status||''}</td><td>${acts('appts')(a.id)}</td></tr>`));
+  if(tab==='treatments') h = bar('العلاجات والخدمات','treatments') + table(['العلاج','التصنيف','السعر','المدة','إجراء'], D.treatments.map(t=>`<tr><td>${t.name}</td><td>${t.category||''}</td><td>${money(t.price)}</td><td>${t.duration||''} د</td><td>${acts('treatments')(t.id)}</td></tr>`));
+  if(tab==='invoices') h = `<div class="cards"><div class="card">الإيرادات<b>${money(total)}</b></div><div class="card">المدفوع<b>${money(paid)}</b></div><div class="card">المتبقي<b>${money(total-paid)}</b></div><div class="card">الفواتير<b>${inv.length}</b></div></div>` + bar('الفواتير','invoices') +
+    table(['المريض','الخدمة','الإجمالي','المدفوع','المتبقي','إجراء'], inv.map(i=>`<tr><td>${pname(i.patientId)}</td><td>${i.service||''}</td><td>${money(i.total)}</td><td>${money(i.paid)}</td><td>${money(i.total-i.paid)}</td><td>${(i.total-i.paid)>0?`<button class="btn s" onclick="pay('${i.id}')">تسديد</button> `:''}${acts('invoices')(i.id)}</td></tr>`));
+  $('view').innerHTML = h;
+}
+
+const pOpts = sel => D.patients.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.name}</option>`).join('');
+const F = {
+  patients:[['name','اسم المريض *'],['phone','رقم الهاتف','tel'],['birth','تاريخ الميلاد','date'],['gender','الجنس',['ذكر','أنثى']],['address','العنوان'],['history','التاريخ المرضي','area'],['notes','الملاحظات الطبية','area']],
+  appts:[['patientId','المريض *','patient'],['date','التاريخ *','date'],['time','الوقت *','time'],['reason','سبب الزيارة'],['status','الحالة',['مؤكد','بانتظار التأكيد','مكتمل','ملغي']]],
+  treatments:[['name','اسم العلاج *'],['category','التصنيف'],['price','السعر','number'],['duration','المدة بالدقائق','number']],
+  invoices:[['patientId','المريض *','patient'],['service','الخدمة'],['total','الإجمالي','number'],['paid','المدفوع الآن','number']]
+};
+function openForm(k,id){
+  const o = id ? D[k].find(x=>x.id===id) : {};
+  $('box').innerHTML = `<h3>${id?'تعديل':'إضافة'}</h3>` + F[k].map(([n,l,t])=>`<label>${l}</label>` + (t==='patient'?`<select id="f_${n}">${pOpts(o[n])}</select>`: Array.isArray(t)?`<select id="f_${n}">${t.map(v=>`<option ${o[n]===v?'selected':''}>${v}</option>`).join('')}</select>`: t==='area'?`<textarea id="f_${n}" rows="2">${o[n]||''}</textarea>`:`<input id="f_${n}" type="${t||'text'}" value="${o[n]??''}">`)).join('') +
+    `<button class="btn" onclick="submitForm('${k}','${id||''}')">حفظ</button> <button class="btn g" onclick="closeM()">إلغاء</button>`;
+  $('modal').classList.add('open');
+}
+function submitForm(k,id){
+  const data={}; F[k].forEach(([n,,t])=>{ const v=$('f_'+n).value; data[n]=t==='number'?(+v||0):v; });
+  if(!(data.name||data.patientId) || (k==='appts'&&(!data.date||!data.time))) return alert('أكمل الحقول المطلوبة');
+  save(k,data,id||null).then(closeM).catch(e=>alert('تعذر الحفظ: '+e.message));
+}
+function pay(id){ const i=D.invoices.find(x=>x.id===id), v=+prompt('مبلغ الدفعة (المتبقي '+(i.total-i.paid)+')'); if(v>0) save('invoices',{paid:Math.min(i.total,(+i.paid||0)+v)},id); }
+function profile(id){
+  const p=D.patients.find(x=>x.id===id);
+  $('box').innerHTML = `<h3>${p.name}</h3><p>📞 ${p.phone||'—'}<br>🏠 ${p.address||'—'}<br>🩺 ${p.history||'—'}<br>📝 ${p.notes||'—'}</p><h4>المواعيد</h4>${D.appts.filter(a=>a.patientId===id).map(a=>`<div>${a.date} ${a.time} — ${a.reason||''}</div>`).join('')||'—'}<h4>الفواتير</h4>${D.invoices.filter(i=>i.patientId===id).map(i=>`<div>${i.service||''}: ${money(i.paid)} / ${money(i.total)}</div>`).join('')||'—'}<br><button class="btn g" onclick="closeM()">إغلاق</button>`;
+  $('modal').classList.add('open');
+}
+function closeM(){ $('modal').classList.remove('open'); }
+$('modal').onclick = e => e.target.id==='modal' && closeM();
+
+// ===== PWA =====
+let dp; window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); dp=e; $('inst').style.display='inline-block'; });
+function installApp(){ dp && dp.prompt(); }
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => {
+  r.addEventListener('updatefound', () => { const n=r.installing; n.addEventListener('statechange', () => { if(n.state==='installed' && navigator.serviceWorker.controller) location.reload(); }); });
+});
+</script>
+</body>
+</html>
