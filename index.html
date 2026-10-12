@@ -58,7 +58,7 @@ const firebaseConfig = {
   storageBucket: "PUT_PROJECT.appspot.com", messagingSenderId: "PUT_SENDER_ID", appId: "PUT_APP_ID"
 };
 // أسماء المجموعات (Collections): غيّرها لتطابق قاعدة البيانات الحالية
-const COL = {patients:'patients', appts:'appointments', treatments:'treatments', invoices:'invoices'};
+const COL = {patients:'patients', appts:'appointments', treatments:'services', invoices:'invoices'};
 // ===================================================================
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth(), db = firebase.firestore();
